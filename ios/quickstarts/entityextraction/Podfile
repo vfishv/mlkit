@@ -1,21 +1,23 @@
-platform :ios, '10.0'
+platform :ios, '11.0'
 use_frameworks!
 
 project 'EntityExtractionExample.xcodeproj'
 
-pod 'GoogleMLKit/EntityExtraction', '2.3.0'
+pod 'GoogleMLKit/EntityExtraction', '4.0.0'
 
 target 'EntityExtractionExample' do
-  target 'EntityExtractionExampleTests' do
-    inherit! :search_paths
-  end
 end
 
 target 'EntityExtractionExampleObjC' do
-  target 'EntityExtractionExampleObjCTests' do
-    inherit! :search_paths
-  end
 end
 
-target 'EntityExtractionExampleUITests' do
+# Disable signing for pods
+post_install do |installer|
+  installer.generated_projects.each do |project|
+    project.targets.each do |target|
+        target.build_configurations.each do |config|
+            config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+         end
+    end
+  end
 end

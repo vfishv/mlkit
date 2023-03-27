@@ -16,12 +16,7 @@
 
 package com.google.mlkit.vision.demo.kotlin
 
-import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProvider
-import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build.VERSION
 import android.os.Build.VERSION_CODES
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -43,8 +38,9 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.common.annotation.KeepName
 import com.google.mlkit.common.MlKitException
 import com.google.mlkit.common.model.LocalModel
@@ -58,6 +54,7 @@ import com.google.mlkit.vision.demo.kotlin.labeldetector.LabelDetectorProcessor
 import com.google.mlkit.vision.demo.kotlin.objectdetector.ObjectDetectorProcessor
 import com.google.mlkit.vision.demo.kotlin.posedetector.PoseDetectorProcessor
 import com.google.mlkit.vision.demo.kotlin.segmenter.SegmenterProcessor
+import com.google.mlkit.vision.demo.kotlin.facemeshdetector.FaceMeshDetectorProcessor;
 import com.google.mlkit.vision.demo.kotlin.textdetector.TextRecognitionProcessor
 import com.google.mlkit.vision.demo.preference.PreferenceUtils
 import com.google.mlkit.vision.demo.preference.SettingsActivity
@@ -75,10 +72,7 @@ import java.util.ArrayList
 @KeepName
 @RequiresApi(VERSION_CODES.LOLLIPOP)
 class CameraXLivePreviewActivity :
-  AppCompatActivity(),
-  ActivityCompat.OnRequestPermissionsResultCallback,
-  OnItemSelectedListener,
-  CompoundButton.OnCheckedChangeListener {
+  AppCompatActivity(), OnItemSelectedListener, CompoundButton.OnCheckedChangeListener {
 
   private var previewView: PreviewView? = null
   private var graphicOverlay: GraphicOverlay? = null
@@ -94,16 +88,6 @@ class CameraXLivePreviewActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     Log.d(TAG, "onCreate")
-    if (VERSION.SDK_INT < VERSION_CODES.LOLLIPOP) {
-      Toast.makeText(
-          applicationContext,
-          "CameraX is only supported on SDK version >=21. Current SDK version is " +
-            VERSION.SDK_INT,
-          Toast.LENGTH_LONG
-        )
-        .show()
-      return
-    }
     if (savedInstanceState != null) {
       selectedModel = savedInstanceState.getString(STATE_SELECTED_MODEL, OBJECT_DETECTION)
     }
@@ -134,6 +118,7 @@ class CameraXLivePreviewActivity :
     options.add(TEXT_RECOGNITION_DEVANAGARI)
     options.add(TEXT_RECOGNITION_JAPANESE)
     options.add(TEXT_RECOGNITION_KOREAN)
+    options.add(FACE_MESH_DETECTION)
 
     // Creating adapter for spinner
     val dataAdapter = ArrayAdapter(this, R.layout.spinner_style, options)
@@ -151,9 +136,7 @@ class CameraXLivePreviewActivity :
         this,
         Observer { provider: ProcessCameraProvider? ->
           cameraProvider = provider
-          if (allPermissionsGranted()) {
-            bindAllCameraUseCases()
-          }
+          bindAllCameraUseCases()
         }
       )
 
@@ -162,10 +145,6 @@ class CameraXLivePreviewActivity :
       val intent = Intent(applicationContext, SettingsActivity::class.java)
       intent.putExtra(SettingsActivity.EXTRA_LAUNCH_SOURCE, LaunchSource.CAMERAX_LIVE_PREVIEW)
       startActivity(intent)
-    }
-
-    if (!allPermissionsGranted()) {
-      runtimePermissions
     }
   }
 
@@ -369,6 +348,7 @@ class CameraXLivePreviewActivity :
             )
           }
           SELFIE_SEGMENTATION -> SegmenterProcessor(this)
+          FACE_MESH_DETECTION -> FaceMeshDetectorProcessor(this)
           else -> throw IllegalStateException("Invalid model name")
         }
       } catch (e: Exception) {
@@ -417,89 +397,25 @@ class CameraXLivePreviewActivity :
     cameraProvider!!.bindToLifecycle(/* lifecycleOwner= */ this, cameraSelector!!, analysisUseCase)
   }
 
-  private val requiredPermissions: Array<String?>
-    get() =
-      try {
-        val info =
-          this.packageManager.getPackageInfo(this.packageName, PackageManager.GET_PERMISSIONS)
-        val ps = info.requestedPermissions
-        if (ps != null && ps.isNotEmpty()) {
-          ps
-        } else {
-          arrayOfNulls(0)
-        }
-      } catch (e: Exception) {
-        arrayOfNulls(0)
-      }
-
-  private fun allPermissionsGranted(): Boolean {
-    for (permission in requiredPermissions) {
-      if (!isPermissionGranted(this, permission)) {
-        return false
-      }
-    }
-    return true
-  }
-
-  private val runtimePermissions: Unit
-    get() {
-      val allNeededPermissions: MutableList<String?> = ArrayList()
-      for (permission in requiredPermissions) {
-        if (!isPermissionGranted(this, permission)) {
-          allNeededPermissions.add(permission)
-        }
-      }
-      if (allNeededPermissions.isNotEmpty()) {
-        ActivityCompat.requestPermissions(
-          this,
-          allNeededPermissions.toTypedArray(),
-          PERMISSION_REQUESTS
-        )
-      }
-    }
-
-  override fun onRequestPermissionsResult(
-    requestCode: Int,
-    permissions: Array<String>,
-    grantResults: IntArray
-  ) {
-    Log.i(TAG, "Permission granted!")
-    if (allPermissionsGranted()) {
-      bindAllCameraUseCases()
-    }
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-  }
-
   companion object {
     private const val TAG = "CameraXLivePreview"
-    private const val PERMISSION_REQUESTS = 1
     private const val OBJECT_DETECTION = "Object Detection"
     private const val OBJECT_DETECTION_CUSTOM = "Custom Object Detection"
     private const val CUSTOM_AUTOML_OBJECT_DETECTION = "Custom AutoML Object Detection (Flower)"
     private const val FACE_DETECTION = "Face Detection"
     private const val TEXT_RECOGNITION_LATIN = "Text Recognition Latin"
-    private const val TEXT_RECOGNITION_CHINESE = "Text Recognition Chinese"
-    private const val TEXT_RECOGNITION_DEVANAGARI = "Text Recognition Devanagari"
-    private const val TEXT_RECOGNITION_JAPANESE = "Text Recognition Japanese"
-    private const val TEXT_RECOGNITION_KOREAN = "Text Recognition Korean"
+    private const val TEXT_RECOGNITION_CHINESE = "Text Recognition Chinese (Beta)"
+    private const val TEXT_RECOGNITION_DEVANAGARI = "Text Recognition Devanagari (Beta)"
+    private const val TEXT_RECOGNITION_JAPANESE = "Text Recognition Japanese (Beta)"
+    private const val TEXT_RECOGNITION_KOREAN = "Text Recognition Korean (Beta)"
     private const val BARCODE_SCANNING = "Barcode Scanning"
     private const val IMAGE_LABELING = "Image Labeling"
     private const val IMAGE_LABELING_CUSTOM = "Custom Image Labeling (Birds)"
     private const val CUSTOM_AUTOML_LABELING = "Custom AutoML Image Labeling (Flower)"
     private const val POSE_DETECTION = "Pose Detection"
     private const val SELFIE_SEGMENTATION = "Selfie Segmentation"
+    private const val FACE_MESH_DETECTION = "Face Mesh Detection (Beta)";
 
     private const val STATE_SELECTED_MODEL = "selected_model"
-
-    private fun isPermissionGranted(context: Context, permission: String?): Boolean {
-      if (ContextCompat.checkSelfPermission(context, permission!!) ==
-          PackageManager.PERMISSION_GRANTED
-      ) {
-        Log.i(TAG, "Permission granted: $permission")
-        return true
-      }
-      Log.i(TAG, "Permission NOT granted: $permission")
-      return false
-    }
   }
 }
